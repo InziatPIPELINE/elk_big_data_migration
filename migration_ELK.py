@@ -27,12 +27,26 @@ es  = elasticsearch.Elasticsearch(
         timeout = 30
     )
 
+#track latest file for collect the last timestamp of that file for resume session
+def find_latest_file(object):
+    if object.is_file():
+        file_track = open('track_dns.txt', 'r')
+        for line in file_track:
+            latest_file = line
+            break
+        file_track.close()
+    else:
+        latest_file = None
+    return  latest_file
 
 my_file = Path("log_temp") #needn't use
 track_dns = Path("track_dns.txt") #stating dns record for resume session
-if my_file.is_file():
+
+current_file = find_latest_file (track_dns)
+#print(current_file)
+if Path(current_file.rstrip()+'.log').is_file():
     # file exists
-    with open(my_file, 'rb') as f:
+    with open(current_file.rstrip()+'.log', 'rb') as f:
         try:  # catch OSError in case of a one line file 
             f.seek(-2, os.SEEK_END)
             while f.read(1) != b'\n':
@@ -42,7 +56,7 @@ if my_file.is_file():
         last_line = f.readline().decode()
     match = re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z', last_line) #regex pattern match for extract timestamp for stating timestamp record
     gte_timestamp = datetime.strptime(match.group(0), '%Y-%m-%dT%H:%M:%S.%fZ')
-    #print(gte_timestamp)
+    print(gte_timestamp)
 else:
     gte_timestamp = None
     
@@ -211,7 +225,7 @@ def main():
     #DNS track file create and get all indexs starts with dns
     if track_dns.is_file() == False:
         dns_track = open('track_dns.txt', 'a')
-        for i in es.indices.get('*'):
+        for i in reversed(es.indices.get('*')):
             if i.startswith("dns") == True:
                 dns_track.write("%s\n" % i)
         dns_track.close()
@@ -219,9 +233,9 @@ def main():
     with open(track_dns) as file:
         lines = file.readlines()
         lines = [line.rstrip() for line in lines]
-        lines = Reverse(lines)
+        #lines = Reverse(lines)
         #print (lines)
-        time.sleep(10)
+        #time.sleep(10)
     #indexLists = ['dns-2020.11.20']
 
 #Main controller
@@ -229,9 +243,11 @@ def main():
   
         global track # variable for dns index 
         track = index
-
-        es.indices.put_settings(index=index,body= {"index" : {"max_result_window" : 100000 }})
-        dataFrme = get_data(query_call(str(index)))
+        try:
+            es.indices.put_settings(index=index,body= {"index" : {"max_result_window" : 100000 }})
+            dataFrme = get_data(query_call(str(index)))
+        except elasticsearch.NotFoundError as err:
+            continue
 
 if __name__ == "__main__":
 
