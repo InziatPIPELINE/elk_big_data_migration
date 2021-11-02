@@ -2,6 +2,7 @@
 import os
 from typing import Iterator, Dict, Any
 from shutil import copyfile
+import elasticsearch
 import time
 import re
 from datetime import datetime, timedelta
