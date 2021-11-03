@@ -29,10 +29,13 @@ es  = elasticsearch.Elasticsearch(
 #DNS track file create and get all indexs starts with dns
 
 my_file = Path("log_temp") #needn't use
-track_dns = Path("track_dns.txt") #stating dns record for resume session
+#stating dns record for resume session
+#track_dns = Path("track_dns.txt") 
+track_dns = Path("/opt/elk-migration/track_dns.txt") 
 
 if track_dns.is_file() == False:
-    dns_track = open('track_dns.txt', 'a')
+    #dns_track = open('track_dns.txt', 'a')
+    dns_track = open('/opt/elk-migration/track_dns.txt', 'a')
     for i in reversed(es.indices.get('*')):
         if i.startswith("dns") == True:
             dns_track.write("%s\n" % i)
@@ -40,7 +43,8 @@ if track_dns.is_file() == False:
 #track latest file for collect the last timestamp of that file for resume session
 def find_latest_file(object):
     if object.is_file():
-        file_track = open('track_dns.txt', 'r')
+        #file_track = open('track_dns.txt', 'r')
+        file_track = open('/opt/elk-migration/track_dns.txt', 'r')
         for line in file_track:
             latest_file = line
             break
@@ -48,36 +52,20 @@ def find_latest_file(object):
     else:
         latest_file = None
     return  latest_file
-
-current_file = find_latest_file (track_dns)
-#print(current_file)
-if Path(current_file.rstrip()+'.log').is_file():
-    # file exists
-    with open(current_file.rstrip()+'.log', 'rb') as f:
-        try:  # catch OSError in case of a one line file 
-            f.seek(-2, os.SEEK_END)
-            while f.read(1) != b'\n':
-                f.seek(-2, os.SEEK_CUR) #bigdata last record fetch
-        except OSError:
-            f.seek(0)
-        last_line = f.readline().decode()
-    match = re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z', last_line) #regex pattern match for extract timestamp for stating timestamp record
-    gte_timestamp = datetime.strptime(match.group(0), '%Y-%m-%dT%H:%M:%S.%fZ')
-    print(gte_timestamp)
-else:
-    gte_timestamp = None
     
 
 #individual file generate for elk migration w.r.t to index name
 def write_batch(docs):
-    if Path(docs[0]['index']+'.log').is_file() == False:
-        with open(docs[0]['index']+'.log', 'a+') as f:
+    #if Path(docs[0]['index']+'.log').is_file() == False:
+    if Path('/opt/elk-migration/data/'+docs[0]['index']+'.log').is_file() == False:
+        with open('/opt/elk-migration/data/'+docs[0]['index']+'.log', 'a+') as f:
             for item in docs:
                 f.write("%s resolved: %s %s\n" % (item["message"], item["domain_ip"],item["timestamp"])) #collecting and writing only message, dnslookup
                                                                                                          #and ingest timestamp
 #if file is create write the others iteration
     else :
-        with open(docs[0]['index']+'.log', 'a+') as f:
+        #with open(docs[0]['index']+'.log', 'a+') as f:
+        with open('/opt/elk-migration/data/'+docs[0]['index']+'.log', 'a+') as f:
             for item in docs:
                 f.write("%s resolved: %s %s\n" % (item["message"], item["domain_ip"],item["timestamp"]))
 
@@ -165,7 +153,7 @@ def get_data(indices: Iterator[Dict[str, Any]])->None:
 
 #controller for dns record save
             if not hits:
-                with open("track_dns.txt", "r") as t_file:
+                with open("/opt/elk-migration/track_dns.txt", "r") as t_file:
 
                     for line in t_file:
                         line = line.rstrip()
@@ -174,7 +162,7 @@ def get_data(indices: Iterator[Dict[str, Any]])->None:
                         else:
                             mod_line= None
 
-                for temp in fileinput.input("track_dns.txt", inplace=True):
+                for temp in fileinput.input("/opt/elk-migration/track_dns.txt", inplace=True):
                     if temp.strip().startswith(track):
                         if mod_line is not None:
                             fin_line = mod_line
@@ -241,8 +229,26 @@ def main():
 #Main controller
     for index in lines:
   
-        global track # variable for dns index 
+        global track # variable for dns index
+        global gte_timestamp
         track = index
+        current_file = find_latest_file (track_dns)
+        #print(current_file)
+        if Path(current_file.rstrip()+'.log').is_file():
+            # file exists
+            with open(current_file.rstrip()+'.log', 'rb') as f:
+                try:  # catch OSError in case of a one line file 
+                    f.seek(-2, os.SEEK_END)
+                    while f.read(1) != b'\n':
+                        f.seek(-2, os.SEEK_CUR) #bigdata last record fetch
+                except OSError:
+                    f.seek(0)
+                last_line = f.readline().decode()
+            match = re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z', last_line) #regex pattern match for extract timestamp for stating timestamp record
+            gte_timestamp = datetime.strptime(match.group(0), '%Y-%m-%dT%H:%M:%S.%fZ')
+            print(gte_timestamp)
+        else:
+            gte_timestamp = None
         try:
             es.indices.put_settings(index=index,body= {"index" : {"max_result_window" : 100000 }})
             dataFrme = get_data(query_call(str(index)))
