@@ -26,7 +26,17 @@ es  = elasticsearch.Elasticsearch(
         retry_on_timeout = True,
         timeout = 30
     )
+#DNS track file create and get all indexs starts with dns
 
+my_file = Path("log_temp") #needn't use
+track_dns = Path("track_dns.txt") #stating dns record for resume session
+
+if track_dns.is_file() == False:
+    dns_track = open('track_dns.txt', 'a')
+    for i in reversed(es.indices.get('*')):
+        if i.startswith("dns") == True:
+            dns_track.write("%s\n" % i)
+    dns_track.close()
 #track latest file for collect the last timestamp of that file for resume session
 def find_latest_file(object):
     if object.is_file():
@@ -38,9 +48,6 @@ def find_latest_file(object):
     else:
         latest_file = None
     return  latest_file
-
-my_file = Path("log_temp") #needn't use
-track_dns = Path("track_dns.txt") #stating dns record for resume session
 
 current_file = find_latest_file (track_dns)
 #print(current_file)
@@ -222,13 +229,6 @@ def main():
     todayIndex = "dns-{today}"
     todayTime = dt.now()
     todayIndexStr = todayIndex.format(today = todayTime.strftime('%Y.%m.%d'))
-    #DNS track file create and get all indexs starts with dns
-    if track_dns.is_file() == False:
-        dns_track = open('track_dns.txt', 'a')
-        for i in reversed(es.indices.get('*')):
-            if i.startswith("dns") == True:
-                dns_track.write("%s\n" % i)
-        dns_track.close()
     #create a list for working in a loop as a list behavior
     with open(track_dns) as file:
         lines = file.readlines()
